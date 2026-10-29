@@ -36,6 +36,8 @@ class MainActivity : Activity() {
     private val tasks = mutableListOf<PlannerTask>()
     private lateinit var content: LinearLayout
     private var tab = "home"
+    private var plannerMode = "day"
+    private var selectedDate = Date()
     private val persianLocale = Locale("fa", "IR")
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,6 +58,8 @@ class MainActivity : Activity() {
             setTextColor(0xFF172B4D.toInt())
             if (bold) setTypeface(null, Typeface.BOLD)
             setPadding(dp(2), dp(7), dp(2), dp(7))
+            gravity = Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
         }
 
     private fun button(text: String, action: () -> Unit) = Button(this).apply {
@@ -95,7 +99,7 @@ class MainActivity : Activity() {
         scroller.addView(content)
         outer.addView(scroller)
         setContentView(outer)
-        content.addView(label("آریان پلنر", 27f, true))
+        content.addView(label("✦ آریان پلنر ✦", 28f, true))
         content.addView(label("برنامه‌ریزی ساده برای روزهای بهتر", 14f))
         val todayCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -120,14 +124,39 @@ class MainActivity : Activity() {
     }
 
     private fun showHome() {
-        content.addView(label("یه قدم کوچیک، یه پیشرفت واقعی.", 19f, true))
-        val today = todayIso()
-        val todayTasks = tasks.filter { it.date == today }
-        content.addView(label("کارهای امروز: ${todayTasks.size}   |   انجام‌شده: ${todayTasks.count { it.done }}"))
-        content.addView(button("➕ افزودن کار") { showAddTask() })
-        content.addView(label("کارهای نزدیک", 18f, true))
-        tasks.filter { !it.done }.sortedBy { it.date + it.time }.take(5).forEach { addTaskRow(it) }
-        content.addView(button("⚽ دیدن مسابقات رئال") { tab = "matches"; showUi() })
+        content.addView(label("برنامه‌ات رو قشنگ و مرتب بچین ✨", 18f, true))
+        val modes = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, dp(8)) }
+        listOf("روز" to "day", "ماه" to "month", "سال" to "year").forEach { (title, key) ->
+            modes.addView(button(if (plannerMode == key) "● $title" else title) { plannerMode = key; showUi() }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { setMargins(dp(3),0,dp(3),0) })
+        }
+        content.addView(modes)
+        content.addView(button("📅 انتخاب تاریخ  ·  ${persianDate(selectedDate)}") {
+            val c = Calendar.getInstance().apply { time = selectedDate }
+            DatePickerDialog(this, { _, y, m, d ->
+                selectedDate = Calendar.getInstance().apply { set(y, m, d, 12, 0, 0) }.time
+                showUi()
+            }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
+        })
+        val matching = tasks.filter { t ->
+            val d = parseDate(t.date) ?: return@filter false
+            val a = Calendar.getInstance().apply { time = d }
+            val b = Calendar.getInstance().apply { time = selectedDate }
+            when (plannerMode) {
+                "month" -> a.get(Calendar.YEAR) == b.get(Calendar.YEAR) && a.get(Calendar.MONTH) == b.get(Calendar.MONTH)
+                "year" -> a.get(Calendar.YEAR) == b.get(Calendar.YEAR)
+                else -> t.date == SimpleDateFormat("yyyy-MM-dd", Locale.US).format(selectedDate)
+            }
+        }.sortedBy { it.date + it.time }
+        val title = when (plannerMode) { "month" -> IcuDateFormat("MMMM yyyy", ULocale("fa_IR@calendar=persian")).format(selectedDate); "year" -> IcuDateFormat("yyyy", ULocale("fa_IR@calendar=persian")).format(selectedDate); else -> persianDate(selectedDate) }
+        content.addView(label(title, 22f, true))
+        content.addView(label("${matching.size} کار  ·  ${matching.count { it.done }} انجام‌شده", 14f))
+        content.addView(button("＋ افزودن کار به این تاریخ") { showAddTask() })
+        if (matching.isEmpty()) {
+            val empty = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(18), dp(24), dp(18), dp(24)) }
+            empty.addView(label("🌱", 42f, true)); empty.addView(label("هنوز کاری برای این بازه نداری", 17f, true)); empty.addView(label("یه برنامهٔ کوچیک برای خودت بساز!", 14f))
+            addCard(empty)
+        } else matching.forEach { addTaskRow(it) }
+        content.addView(button("⚽ مسابقات رئال مادرید") { tab = "matches"; showUi() })
     }
 
     private fun showTasks() {
@@ -166,30 +195,45 @@ class MainActivity : Activity() {
         }
         val title = EditText(this).apply { hint = "اسم کار، مثلاً کتاب‌خوانی"; setSingleLine(true) }
         val note = EditText(this).apply { hint = "یادداشت (اختیاری)"; setSingleLine(true) }
-        val date = EditText(this).apply { hint = "تاریخ شمسی YYYY-MM-DD"; setText(todayPersianIso()); setSingleLine(true) }
-        val time = EditText(this).apply { hint = "ساعت HH:MM"; setText("17:00"); setSingleLine(true) }
+        val chosenDate = Calendar.getInstance().apply { time = selectedDate }
+        val date = button("📅 تاریخ: ${todayPersianIso()}") {}
+        var chosenDateText = IcuDateFormat("yyyy-MM-dd", ULocale("fa_IR@calendar=persian")).format(selectedDate)
+        date.text = "📅 تاریخ: ${IcuDateFormat("EEEE d MMMM yyyy", ULocale("fa_IR@calendar=persian")).format(selectedDate)}"
+        date.setOnClickListener {
+            DatePickerDialog(this, { _, y, m, d ->
+                val picked = Calendar.getInstance().apply { set(y,m,d,12,0,0) }.time
+                chosenDateText = IcuDateFormat("yyyy-MM-dd", ULocale("fa_IR@calendar=persian")).format(picked)
+                date.text = "📅 تاریخ: ${IcuDateFormat("EEEE d MMMM yyyy", ULocale("fa_IR@calendar=persian")).format(picked)}"
+            }, chosenDate.get(Calendar.YEAR), chosenDate.get(Calendar.MONTH), chosenDate.get(Calendar.DAY_OF_MONTH)).show()
+        }
+        var chosenTime = "17:00"
+        val time = button("🕒 ساعت: $chosenTime") {}
+        time.setOnClickListener {
+            val now = Calendar.getInstance()
+            TimePickerDialog(this, { _, h, m -> chosenTime = String.format(Locale.US, "%02d:%02d", h, m); time.text = "🕒 ساعت: $chosenTime" }, now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), true).show()
+        }
         val duration = EditText(this).apply { hint = "مدت به دقیقه"; setText("30"); inputType = 2 }
         val icon = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("📚 کتاب‌خوانی", "📝 درس", "🏋️ ورزش", "🧘 استراحت", "💧 آب خوردن", "🎯 متفرقه"))
+                listOf("📚 کتاب‌خوانی", "✍️ نوشتن", "📖 مطالعه", "🎓 درس", "🧮 ریاضی", "🧪 علوم", "💻 برنامه‌نویسی", "🌍 زبان", "🏃 دویدن", "🏋️ ورزش", "⚽ فوتبال", "🚴 دوچرخه‌سواری", "🧘 مدیتیشن", "💧 آب خوردن", "🥗 تغذیه", "😴 خواب", "🎨 هنر", "🎸 موسیقی", "🧹 مرتب‌کاری", "👨‍👩‍👧 خانواده", "👥 دوستان", "💼 کار", "🎯 هدف شخصی", "🛍️ خرید", "🩺 سلامت", "🙏 شکرگزاری", "✨ متفرقه"))
         }
         val reminder = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("۱۵ دقیقه قبل", "۳۰ دقیقه قبل", "۱ ساعت قبل", "۱ روز قبل", "بدون یادآوری"))
+                listOf("۵ دقیقه قبل", "۱۵ دقیقه قبل", "۳۰ دقیقه قبل", "۱ ساعت قبل", "۱ روز قبل", "بدون یادآوری"))
         }
         box.addView(label("افزودن کار", 21f, true))
         listOf(title, date, time, duration, icon, reminder, note).forEach { box.addView(it) }
         box.addView(button("ذخیره") {
             if (title.text.isNullOrBlank()) { title.error = "اسم کار رو وارد کن"; return@button }
-            val dateText = date.text.toString().trim()
-            val timeText = time.text.toString().trim()
+            val dateText = chosenDateText
+            val timeText = chosenTime
             val parsedInputDate = parseUserDate(dateText)
             if (parsedInputDate == null || !timeText.matches(Regex("\\d{2}:\\d{2}"))) {
                 Toast.makeText(this, "تاریخ شمسی را مثل ۱۴۰۵-۰۸-۰۷ و ساعت را مثل 17:00 وارد کن.", Toast.LENGTH_LONG).show(); return@button
             }
             val storedDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(parsedInputDate)
-            val icons = listOf("📚", "📝", "🏋️", "🧘", "💧", "🎯")
-            val reminders = listOf(15, 30, 60, 1440, 0)
+            val icons = listOf("📚", "✍️", "📖", "🎓", "🧮", "🧪", "💻", "🌍", "🏃", "🏋️", "⚽", "🚴", "🧘", "💧", "🥗", "😴", "🎨", "🎸", "🧹", "👨‍👩‍👧", "👥", "💼", "🎯", "🛍️", "🩺", "🙏", "✨")
+            val reminders = listOf(5, 15, 30, 60, 1440, 0)
             val task = PlannerTask(System.currentTimeMillis(), title.text.toString().trim(),
                 icons[icon.selectedItemPosition], storedDate, timeText,
                 duration.text.toString().toIntOrNull()?.coerceIn(5, 600) ?: 30,
