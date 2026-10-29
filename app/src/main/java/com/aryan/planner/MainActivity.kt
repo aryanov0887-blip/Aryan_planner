@@ -13,7 +13,7 @@ import android.widget.*
 import android.graphics.drawable.GradientDrawable
 import android.icu.text.SimpleDateFormat as IcuDateFormat
 import android.icu.util.ULocale
-import android.icu.util.PersianCalendar
+import android.icu.util.Calendar as IcuCalendar
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -254,9 +254,7 @@ class MainActivity : Activity() {
                             }
                             val localTime = java.text.SimpleDateFormat("HH:mm", Locale.US).format(date)
                             val eventName = ev.optString("name", "Real Madrid")
-                            found.add(date.time to "⚽  رئال مادرید
-$opponent
-${persianDate(date)} · ساعت $localTime")
+                            found.add(date.time to "⚽ رئال مادرید مقابل $opponent · ${persianDate(date)} · ساعت $localTime")
                         }
                     } finally { conn.disconnect() }
                 } catch (e: Exception) {
@@ -347,11 +345,11 @@ ${persianDate(date)} · ساعت $localTime")
         val d = parts[2].toIntOrNull() ?: return null
         if (y < 1300 || m !in 1..12 || d !in 1..31) return null
         return try {
-            val cal = PersianCalendar(ULocale("fa_IR@calendar=persian"))
+            val cal = IcuCalendar.getInstance(ULocale("fa_IR@calendar=persian"))
             cal.clear()
-            cal.set(PersianCalendar.YEAR, y)
-            cal.set(PersianCalendar.MONTH, m - 1)
-            cal.set(PersianCalendar.DAY_OF_MONTH, d)
+            cal.set(IcuCalendar.YEAR, y)
+            cal.set(IcuCalendar.MONTH, m - 1)
+            cal.set(IcuCalendar.DAY_OF_MONTH, d)
             cal.time
         } catch (_: Exception) { null }
     }
