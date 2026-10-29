@@ -196,7 +196,7 @@ class MainActivity : Activity() {
                         }
                         if (madrid) {
                             val raw = ev.optString("date")
-                            val d = java.time.Instant.parse(raw).toDate()
+                            val d = java.util.Date.from(java.time.Instant.parse(raw))
                             if (d.after(Date())) found.add("⚽ رئال مادرید — ${rivals.joinToString(" / ")}\\n${persianDate(d)} · ${SimpleDateFormat("HH:mm", Locale.US).format(d)}")
                         }
                     }
